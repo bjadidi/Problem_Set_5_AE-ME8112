@@ -336,7 +336,8 @@ void Linear_Solver ()
 
 	for (int i=0;i<N;i++)
 	{
-		T[i]=b[i]/A[i][i];
+		//T[i]=b[i]/A[i][i];
+		T[i]=0.00001;
 	}
 	
 	// variable initialize
