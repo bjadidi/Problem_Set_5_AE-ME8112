@@ -17,19 +17,20 @@ using namespace std;
 
 //Global variables
 //Geometry
-
-#define N 9
-float T[N],TF[N];
-float b [N]={17,33,28,49,85,63,39,75,45};
-float A[N][N]={1,2,0,3,0,0,0,0,0,\
-			   2,1,3,0,4,0,0,0,0,\
-			   0,2,1,0,0,3,0,0,0,\
-			   2,0,0,1,3,0,4,0,0,\
-			   0,2,0,3,1,4,0,5,0,\
-			   0,0,2,0,3,1,0,0,4,\
-			   0,0,0,2,0,0,1,3,0,\
-			   0,0,0,0,2,0,3,1,4,\
-			   0,0,0,0,0,2,0,3,1};
+#define nx 3
+#define ny 3
+#define N nx*ny
+long double T[N],TF[N],T0[N],v[N],r[N],tt[N],z[N],y[N];
+long double b [N]={17,33,28,49,85,63,39,75,45};
+long double A[N][5]={0,0,1,2,3,\
+			         0,2,1,3,4,\
+			         0,2,1,0,3,\
+			         2,0,1,3,4,\
+			         2,3,1,4,5,\
+			         2,3,1,0,4,\
+			         2,0,1,3,0,\
+			         2,3,1,4,0,\
+			         2,3,1,0,0};
 
 
 
@@ -38,9 +39,10 @@ void Zero_A_b ();
 void Cout_Ax_b ();
 void Cout_T ();
 void Linear_Solver ();
-void matmul(float rr[N], float AA[N][N], float TT[N],float bb[N]);
-float dot_product(float rr_hat[N],float rr[N]);
-void matmul_2(float vv[N], float AA[N][N], float yy[N]);
+void matmul_1();
+long double dot_product(long double rr_hat[N],long double rr[N]);
+void matmul_2();
+void matmul_3();
 
 //
 
@@ -61,7 +63,7 @@ float sum[N] ;
 for (int i=0;i<N;i++)
 	{
 		sum[i] = 0.0;
-		for (int j =0;j<N;j++)
+		for (int j =0;j<5;j++)
 		{
 			sum[i] = sum[i] + A[i][j]*T[j];
 		}
@@ -93,7 +95,7 @@ void Zero_A_b ()
 {
 	for (int i=0;i<N;i++)
 	{
-		for (int j=0;j<N;j++)
+		for (int j=0;j<5;j++)
 		{
 			A[i][j]=0.0;
 		}
@@ -112,7 +114,7 @@ void Cout_Ax_b ()
 	cout<<endl<<"Ax=b"<<endl;
 	for (int i=0;i<N;i++)
 	{
-		for (int j=0;j<N;j++)
+		for (int j=0;j<5;j++)
 		{
 			cout<<A[i][j]<<" ";
 		}
@@ -136,26 +138,25 @@ void Cout_T ()
 }
 ///////////////End_Cout_T//////////////////////////////////////////////////////
 
-
 ////////////////Begin_Linear_Solver///////////////////////////////////////////////////
 
 void Linear_Solver ()
 {
-	//declerimg parameters
-	float r[N],r_hat[N],y[N],tt[N],s[N],k[N],p[N],v[N],z[N];
-	float rho,rho_old,alpha,omega,beta,resid;
+//declerimg parameters
+	long double r_hat[N],s[N],k[N],p[N];
+	long double rho,rho_old,alpha,omega,beta,resid;
 	int i,j;
 	bool converged ;
 	
-	// initial guess according to lecture content
-
+	// initial guess 
 	for (int i=0;i<N;i++)
 	{
-		T[i]=b[i]/A[i][i];
+		T[i]=b[i]/A[i][2];
+		//T[i]=T0[i];
 	}
 	
 	// variable initialize
-	matmul (r,A,T,b);
+	matmul_1 ();
 	
 	for (int i=0;i<N;i++)
 	{
@@ -173,7 +174,7 @@ void Linear_Solver ()
 	// precondition vector K=diag(A)
 	for (int i=0;i<N;i++)
 	{
-		k[i]=A[i][i];
+		k[i]=A[i][2];
 	} 
 	
 	// Preconditioned BICGSTAB algorithm main body
@@ -194,8 +195,9 @@ void Linear_Solver ()
 		y[i]=p[i]/k[i];
 	}  
   
-  	matmul_2(v,A,y);
-  	alpha= rho/dot_product(r_hat,v);
+  	matmul_2();
+  	
+  	alpha= rho/dot_product( r_hat,v);
   	
   	for (int i=0;i<N;i++)
 	{
@@ -203,7 +205,7 @@ void Linear_Solver ()
 		z[i]=s[i]/k[i];
 	}  
 	
-  	matmul_2(tt,A,z);
+  	matmul_3();
   	omega= dot_product(tt,s)/dot_product(tt,tt);
   	
   	for (int i=0;i<N;i++)
@@ -219,59 +221,95 @@ void Linear_Solver ()
  		resid=resid + r[i]*r[i];
 	}
   	resid = sqrt(resid)/N;
-	if( resid < 1e-8)
-     converged= true;
-
-  
+	if( resid < 10e-9)
+	{
+	     converged= true;
 	}
-
+	}
 
 }
 ////////////////End_Linear_Solver///////////////////////////////////////////////////
 
-////////////////Begin_matmul///////////////////////////////////////////////////
 
-void matmul(float rr[N], float AA[N][N], float TT[N],float bb[N])
+////////////////Begin_matmul_1///////////////////////////////////////////////////
+
+void matmul_1 ()
 {
-	float sum[N];
+	float sum ;
+	float T_temp [N+2*nx];
+	for (int i=0;i<N+2*nx;i++)
+	{
+		T_temp[i]=0.0;
+	}
 	for (int i=0;i<N;i++)
 	{
-		sum[i]=0.0;
-		for (int j=0;j<N;j++)
-		{
-		
-		sum[i]=sum[i]+AA[i][j]*TT[j];
-		
-		}
-		rr[i]=b[i]-sum[i];
+		T_temp [i+nx]= T[i]; 
 	}
+	for (int i=0;i<N;i++)
+	{
+		sum =0.0;
+			
+		sum =sum  + A[i][0]*T_temp[i] + A[i][1]*T_temp[i-1+nx] + A[i][2]*T_temp[i+nx] + A[i][3]*T_temp[i+1+nx] + A[i][4]*T_temp[i+nx+nx];
+		
+		
+		r[i]=b[i]-sum;
+	}
+	
 }
 
-///////////////End_matmul//////////////////////////////////////////////////////
+///////////////End_matmul_1//////////////////////////////////////////////////////
 
 ////////////////Begin_matmul_2///////////////////////////////////////////////////
 
-void matmul_2(float vv[N], float AA[N][N], float yy[N])
+void matmul_2()
 {
-	float sum[N];
+	float T_temp [N+2*nx];
+	for (int i=0;i<N+2*nx;i++)
+	{
+		T_temp[i]=0.0;
+	}
 	for (int i=0;i<N;i++)
 	{
-		sum[i]=0.0;
-		for (int j=0;j<N;j++)
-		{
+		T_temp [i+nx]= y[i]; 
+	}
+	for (int i=0;i<N;i++)
+	{
+		v[i]=0.0;
+			
+		v[i]=v[i] + A[i][0]*T_temp[i] + A[i][1]*T_temp[i-1+nx] + A[i][2]*T_temp[i+nx] + A[i][3]*T_temp[i+1+nx] + A[i][4]*T_temp[i+nx+nx];
 		
-		sum[i]=sum[i]+AA[i][j]*yy[j];
-		
-		}
-		vv[i]=sum[i];
 	}
 }
 
 ///////////////End_matmul_2//////////////////////////////////////////////////////
 
+////////////////Begin_matmul_3///////////////////////////////////////////////////
+
+void matmul_3()
+{
+	float T_temp [N+2*nx];
+	for (int i=0;i<N+2*nx;i++)
+	{
+		T_temp[i]=0.0;
+	}
+	for (int i=0;i<N;i++)
+	{
+		T_temp [i+nx]= z[i]; 
+	}
+	for (int i=0;i<N;i++)
+	{
+		tt[i]=0.0;
+			
+		tt[i]=tt[i] + A[i][0]*T_temp[i] + A[i][1]*T_temp[i+nx] + A[i][2]*T_temp[i+nx] + A[i][3]*T_temp[i+1+nx] + A[i][4]*T_temp[i+nx+nx];
+		
+	}
+}
+
+///////////////End_matmul_3//////////////////////////////////////////////////////
+
 ////////////////Begin_dot_product///////////////////////////////////////////////////
 
-float dot_product(float rr_hat[N],float rr[N])
+long double dot_product(long double rr_hat[N],long double rr[N])
 {
 	float sum=0.0;
 	for (int i=0;i<N;i++)

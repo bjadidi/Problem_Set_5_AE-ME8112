@@ -12,52 +12,36 @@ using namespace std;
 ================================================================================
 /*///////////////End_Header//////////////////////////////////////////////////////
 
+
 //Global variables
-//Geometry
-#define nr 4
-#define nz 4
+#define nr 3
+#define nz 3
 #define lr 1.0
 #define lz 10.0
 #define N nr*nz
-float Vor_1[nr][nz],Vr_1[nr][nz],Vz_1[nr][nz],Vor_2[nr][nz],Vr_2[nr][nz],Vz_2[nr][nz];
-float R[nr],Z[nz],A[N][N],b[N],Velocity[N];
-float v[N],r[N],tt[N],z[N],y[N];
-float deltar,deltaz,deltat,Vor_0,Vr_0,Vz_0,d,vis,C1_r,C1_z,C1,C2,clvz;
-float T[N],TF[N];
 
-int i,j;
-fstream output_file ("PS5.xls",ios::out);
+long double Vor_1[nr][nz],Vr_1[nr][nz],Vz_1[nr][nz],Vor_2[nr][nz];
+long double R[nr],Z[nz],A[N][5],b[N],x[N];
+long double deltar,deltaz,deltat,d,vis,C1_r,C1_z,C1,C2,clvz;
+
 
 
 
 //Decleration of Functions
 void Mesh_Generation ();
-void Initialize ();
-void Output_Function (string label);
+void Initialize (int IC);
+void Output(string label);
 void Vor_Middle_Points ();
 void Vor_Boundary ();
-void Vr_Middle_Points ();
 void Zero_A_b ();
+void Vr_Middle_Points ();
 void Vr_Boundary ();
-void matmul(float rr[N], float AA[N][N], float TT[N],float bb[N]);
-float dot_product(float rr_hat[N],float rr[N]);
-void matmul_2(float vv[N], float AA[N][N], float yy[N]);
-void Linear_Solver ();
+void P_Bi_CGSTAB ();
+long double dot_product (long double a_1[], long double b_1[]);
 void Vz_Midle_Points ();
-void Change_T_Vr ();
+void Change_x_Vr ();
 void Vz_Boundary ();
 void Update_Vor ();
-
-
-
-
-
-
-
-
-/*////////////////Begin_#///////////////////////////////////////////////////
-
-/*///////////////End_#//////////////////////////////////////////////////////
 
 
 
@@ -70,18 +54,21 @@ vis = 1.4e-4; //viscosity
 d = 8.3e-4; //density
 deltat = 10e-6;
 
-//Initialize
-
-Vor_0 = 0.0;
-Vr_0 = 0.0;
-Vz_0 = 0.0;
-Initialize ();
-
 //Mesh
 Mesh_Generation ();
-int t = 0;
-while (t<100)
-{
+
+//Initialize
+Initialize (1);
+
+
+//int t =0;
+//while (t<10000)
+//{
+//
+//if (t%100 == 0)
+//{
+//	cout<<"Iteration ="<<t<<endl;
+//}
 
 //Vorticity
 Vor_Middle_Points ();
@@ -90,24 +77,27 @@ Vor_Boundary ();
 //Radial velocity
 Zero_A_b ();
 Vr_Middle_Points ();
-Vr_Boundary ();
-//Output_Function ("A");
-//Output_Function ("b");
+//Vr_Boundary ();
 
-Linear_Solver ();
-Change_T_Vr ();
-Output_Function ("Vr");
+Output("A");
+
+P_Bi_CGSTAB ();
+Change_x_Vr ();
+
 
 //Axial Velocity
-
 Vz_Midle_Points ();
 Vz_Boundary ();
 
-Output_Function ("Vz");
+//void Update_Vor ();
+//
+//t=t+1;
+//}
 
-t = t+1;
-Update_Vor ();
-}
+Output("Vor");
+Output("Vr");
+Output("Vz");
+
 
 return 0;
 
@@ -143,34 +133,138 @@ void Mesh_Generation()
 
 
 ////////////////Begin_Initialize///////////////////////////////////////////////////
-void Initialize ()
+void Initialize (int IC)
 {
+	if (IC == 1)
+	{
+	
 	for (int i=0;i<nr;i++)
 	{
 		for (int j=0;j<nz;j++)
 		{
-			Vor_1[i][j] = Vor_0;
-			Vr_1[i][j] = Vr_0;
-			Vz_1[i][j] = Vz_0;
+			Vor_1[i][j] = 0.0;
+			Vr_1[i][j] = 0.0;
+			Vz_1[i][j] = 0.0 ;
 		}
+	}
+	
+	}
+	if (IC == 2)
+	{
+	
+	for (int i=0;i<nr;i++)
+	{
+		for (int j=0;j<nz;j++)
+		{
+			Vor_1[i][j] = 2*clvz*R[i]/(lr*lr);
+			Vr_1[i][j] = 0.0;
+			Vz_1[i][j] = clvz*(1 - (R[i]/lr)*(R[i]/lr)) ;
+		}
+	}
+	
 	}
 	
 }
 ///////////////End_Initialize//////////////////////////////////////////////////////
 
-////////////////Begin_Zero_A_b///////////////////////////////////////////////////
-void Zero_A_b ()
+////////////////Begin_Output_Function///////////////////////////////////////////////////
+void Output (string label)
 {
+	if (label == "R")
+	{
+
+		cout<<endl<<"R ="<<endl;
+		for (int i=0;i<nr;i++)
+		{
+			cout<<R[i]<<"	";
+		}
+		
+	}
+//////////////////////////////////////////	
+	if (label == "Z")
+	{
+
+		cout<<endl<<"Z ="<<endl;
+		for (int j=0;j<nz;j++)
+		{
+			cout<<Z[j]<<"	";
+		}
+	}
+//////////////////////////////////////////
+	if (label == "Vor")
+	{
+	
+		cout<<endl<<"Vorticity ="<<endl;
+		for (int i=0;i<nr;i++)
+		{
+			for (int j=0;j<nz;j++)
+			{
+				cout<<Vor_2[i][j]<<"	";
+			}
+			cout<<endl;
+		}
+	}
+	
+//////////////////////////////////////////	
+	if (label == "A")
+	{
+			
+		cout<<endl<<"A ="<<endl;
+		for (int i=0;i<N;i++)
+		{
+			for (int j=0;j<5;j++)
+			{
+				cout<<A[i][j]<<"	";
+			}
+			cout<<endl;
+		}
+	}
+	
+//////////////////////////////////////////	
+	if (label == "b")
+	{
+	
+		cout<<endl<<"b ="<<endl;
+		for (int i=0;i<N;i++)
+		{
+			cout<<b[i];
+			cout<<endl;
+		}
+	}
+//////////////////////////////////////////	
+	if (label == "Vr")
+	{
+	cout<<endl<<"T="<<endl;
 	for (int i=0;i<N;i++)
 	{
-		for (int j=0;j<N;j++)
+		cout<<x[i];
+		cout<<endl;
+	}
+	cout<<endl<<"Radial Velocity="<<endl;
+	for (int i=0;i<nr;i++)
 		{
-			A[i][j]=0.0;
+			for (int j=0;j<nz;j++)
+			{
+				cout<<Vr_1[i][j]<<"	";
+			}
+			cout<<endl;
 		}
-		b[i]=0.0;
+	}
+//////////////////////////////////////////	
+	if (label == "Vz")
+	{
+	cout<<endl<<"Axial Velocity="<<endl;
+	for (int i=0;i<nr;i++)
+		{
+			for (int j=0;j<nz;j++)
+			{
+				cout<<Vz_1[i][j]<<"	";
+			}
+			cout<<endl;
+		}
 	}
 }
-///////////////End_Zero_A_b//////////////////////////////////////////////////////
+///////////////End_Output_Function//////////////////////////////////////////////////////
 
 ////////////////Begin_Vor_Middle_Points///////////////////////////////////////////////////
 
@@ -230,105 +324,19 @@ for (int d=0;d<nr;d++)
 
 ///////////////End_Vor_Boundary//////////////////////////////////////////////////////
 
-
-////////////////Begin_Output_Function///////////////////////////////////////////////////
-void Output_Function (string label)
+////////////////Begin_Zero_A_b///////////////////////////////////////////////////
+void Zero_A_b ()
 {
-	if (label == "R")
-	{
-
-		cout<<endl<<"R ="<<endl;
-		for (int i=0;i<nr;i++)
-		{
-			cout<<R[i]<<"	";
-		}
-		
-	}
-//////////////////////////////////////////	
-	if (label == "Z")
-	{
-
-		cout<<endl<<"Z ="<<endl;
-		for (int j=0;j<nz;j++)
-		{
-			cout<<Z[j]<<"	";
-		}
-	}
-//////////////////////////////////////////
-	if (label == "Vor")
-	{
-	
-		cout<<endl<<"Vorticity ="<<endl;
-		for (int i=0;i<nr;i++)
-		{
-			for (int j=0;j<nz;j++)
-			{
-				cout<<Vor_2[i][j]<<"	";
-			}
-			cout<<endl;
-		}
-	}
-	
-//////////////////////////////////////////	
-	if (label == "A")
-	{
-			
-		cout<<endl<<"A ="<<endl;
-		for (int i=0;i<N;i++)
-		{
-			for (int j=0;j<N;j++)
-			{
-				cout<<A[i][j]<<"	";
-			}
-			cout<<endl;
-		}
-	}
-	
-//////////////////////////////////////////	
-	if (label == "b")
-	{
-	
-		cout<<endl<<"b ="<<endl;
-		for (int i=0;i<N;i++)
-		{
-			cout<<b[i];
-			cout<<endl;
-		}
-	}
-//////////////////////////////////////////	
-	if (label == "Vr")
-	{
-	cout<<endl<<"T="<<endl;
 	for (int i=0;i<N;i++)
 	{
-		cout<<T[i];
-		cout<<endl;
-	}
-	cout<<endl<<"Radial Velocity="<<endl;
-	for (int i=0;i<nr;i++)
+		for (int j=0;j<5;j++)
 		{
-			for (int j=0;j<nz;j++)
-			{
-				cout<<Vr_1[i][j]<<"	";
-			}
-			cout<<endl;
+			A[i][j]=0.0;
 		}
-	}
-//////////////////////////////////////////	
-	if (label == "Vz")
-	{
-	cout<<endl<<"Axial Velocity="<<endl;
-	for (int i=0;i<nr;i++)
-		{
-			for (int j=0;j<nz;j++)
-			{
-				cout<<Vz_1[i][j]<<"	";
-			}
-			cout<<endl;
-		}
+		b[i]=0.0;
 	}
 }
-///////////////End_Output_Function//////////////////////////////////////////////////////
+///////////////End_Zero_A_b//////////////////////////////////////////////////////
 
 ////////////////Begin_Vr_Middle_Points///////////////////////////////////////////////////
 void Vr_Middle_Points ()
@@ -339,11 +347,11 @@ void Vr_Middle_Points ()
 	{
 		for (int j=1;j<nz-1;j++)
 		{
-			A[i+j*nr][i+j*nr]= (-2*C1 -2*C2 -1/R[i]) ;
-			A[i+j*nr][i+j*nr+1]= (C1 + 1/(2*R[i]*deltar)) ;
-			A[i+j*nr][i+j*nr-1]= (C1 - 1/(2*R[i]*deltar)) ;
-			A[i+j*nr][i+j*nr+nr]= C2 ;
-			A[i+j*nr][i+j*nr-nr]= C2 ;
+			A[i+j*nr][2]= (-2*C1 -2*C2 -1/R[i]) ;
+			A[i+j*nr][3]= (C1 + 1/(2*R[i]*deltar)) ;
+			A[i+j*nr][1]= (C1 - 1/(2*R[i]*deltar)) ;
+			A[i+j*nr][4]= C2 ;
+			A[i+j*nr][0]= C2 ;
 			
 			b[i+j*nr]= (Vor_2[i][j+1] - Vor_2[i][j-1])/(2*deltaz);
 
@@ -365,20 +373,20 @@ void Vr_Boundary ()
 // b is already Zero
 for (int j=0;j<nz;j++)
 		{
-			A[0+j*nr][0+j*nr]= 1 ;
-			A[nr-1+j*nr][nr-1+j*nr]= 1;
+			A[0+j*nr][2]= 1 ;
+			A[nr-1+j*nr][2]= 1;
 			
 		}
 for (int i=1;i<nr;i++)
 		{
-			A[i][i]= 1 ;	
+			A[i][2]= 1 ;	
 		}
 
 // outflow	
 for (int i=1;i<nr-1;i++)
 	{
-		A[(nz-1)*nr+i][(nz-1)*nr+i]=1.0 ;
-		A[(nz-1)*nr+i][(nz-1)*nr+i-nr]=-1.0;
+		A[(nz-1)*nr+i][2]=1.0 ;
+		A[(nz-1)*nr+i][0]=-1.0;
 			
 	}
 }
@@ -386,154 +394,234 @@ for (int i=1;i<nr-1;i++)
 ///////////////End_Vr_Boundary//////////////////////////////////////////////////////
 
 ////////////////Begin_Linear_Solver///////////////////////////////////////////////////
-
-void Linear_Solver ()
+// This function solves a tri-diagonal linear system using preconditioned Bi-CGSTAB
+void P_Bi_CGSTAB ()
 {
-	//declerimg parameters
-	float r[N],r_hat[N],y[N],tt[N],s[N],k[N],p[N],v[N],z[N];
-	float rho,rho_old,alpha,omega,beta,resid;
-	int i,j;
-	bool converged ;
+	long double r[N],v[N],p[N],r_bar[N],vim1[N],pim1[N],rim1[N],xim1[N];
+	long double y[N],K[N],z[N],s[N],t[N],kinvs[N],kinvt[N],esym[N],fsym[N],gsym[N],bsym[N];
+	int i,j,k;
+	long double errsum,rho,alpha,omega,CGTOL,rhoim1,omegaim1,beta;
 	
-	// initial guess according to lecture content
+	
+	CGTOL = 1e-9;
 
-	for (int i=0;i<N;i++)
+	// initial guess
+	for (i=0;i<N;i++)
 	{
-		//T[i]=b[i]/A[i][i];
-		T[i] = 0.00001;
+		//xim1[i]=b[i]/A[i][2];
+		xim1[i] = 0.0001;
 	}
 	
-	// variable initialize
-	matmul (r,A,T,b);
-	
-	for (int i=0;i<N;i++)
+	//Preconditioner
+	for (i=0;i<N;i++)
 	{
-		r_hat[i]=r[i];
-	}
-	rho=1.0;
-	alpha=1.0;
-	omega=1.0;
-	for (int i=0;i<N;i++)
-	{
-		v[i]=0.0;
-		p[i]=0.0;
+		K[i] = A[i][2];
 	}
 	
-	// precondition vector K=diag(A)
-	for (int i=0;i<N;i++)
+	//Calculate r_0
+	i=0;
+	rim1[i]=b[i] - A[i][4]*xim1[i+nr] - A[i][2]*xim1[i] - A[i][3]*xim1[i+1];
+	for (i=1;i<nr;i++)
 	{
-		k[i]=A[i][i];
-	} 
-	
-	// Preconditioned BICGSTAB algorithm main body
-	
-	converged = false;
-	
-	while (converged == false)// check if the norm is satisfied 
-	{
-	
-	rho_old=rho;
-	
-	rho=dot_product(r_hat,r);
-	beta= (rho/rho_old) * (alpha/omega);
-	
-	for (int i=0;i<N;i++)
-	{
-		p[i]=r[i] + beta * (p[i] - omega*v[i]);
-		y[i]=p[i]/k[i];
-	}  
-  
-  	matmul_2(v,A,y);
-  	alpha= rho/dot_product(r_hat,v);
-  	
-  	for (int i=0;i<N;i++)
-	{
-		s[i]=r[i]-alpha*v[i];
-		z[i]=s[i]/k[i];
-	}  
-	
-  	matmul_2(tt,A,z);
-  	omega= dot_product(tt,s)/dot_product(tt,tt);
-  	
-  	for (int i=0;i<N;i++)
-	{
-		T[i]=T[i] + alpha *y[i] + omega * z[i];
-		r[i]=s[i] - omega * tt[i];
-	} 
- 	
- 	resid = 0.0;
-  
- 	for (int i=0;i<N;i++)
- 	{
- 		resid=resid + r[i]*r[i];
+		rim1[i]=b[i] - A[i][4]*xim1[i+nr] - A[i][1]*xim1[i-1] - A[i][2]*xim1[i] - A[i][3]*xim1[i+1];
 	}
-  	resid = sqrt(resid)/N;
-	if( resid < 1e-8)
-     converged= true;
+	for (i=nr;i<N-nr;i++)
+	{
+		rim1[i]=b[i] - A[i][0]*xim1[i-nr] - A[i][4]*xim1[i+nr] - A[i][1]*xim1[i-1] - A[i][2]*xim1[i] - A[i][3]*xim1[i+1];
+	}
+	for (i=N-nr;i<N-1;i++)
+	{
+		rim1[i]=b[i] - A[i][0]*xim1[i-nr] - A[i][1]*xim1[i-1] - A[i][2]*xim1[i] - A[i][3]*xim1[i+1];
+	}
+	i = N-1;
+	rim1[i]=b[i] - A[i][0]*xim1[i-nr] - A[i][1]*xim1[i-1] - A[i][2]*xim1[i];
+	
+	//Set r_0_bar = r_0
+	for (i=0;i<N;i++)
+	{
+		r_bar[i]=rim1[i];
+	}
+	
+	
 
-  
-	}
+// Initialize constants
+ 
+k=0;
+rhoim1 = 1.0;
+alpha = 1.0;
+omegaim1 = 1.0;
+for (i=0;i<N;i++)
+{
+	vim1[i] = 0.0;
+    pim1[i] = 0.0;
+}
 
+
+// Begin main loop
+
+errsum=1.0;
+
+while (errsum > CGTOL)
+{
+	k = k+1;
+	
+	//Track operating of solver
+	if (k%1000 == 0)
+	{
+		cout<<"BiCGSTAB solver iteration ="<<k<<endl<<"Residual ="<<errsum<<endl;
+	}
+	
+	rho = dot_product(rim1,r_bar);
+	beta=rho*alpha/(rhoim1*omegaim1);
+	
+	for (i=0;i<N;i++)
+	{
+		p[i]=rim1[i]+beta*(pim1[i]-omegaim1*vim1[i]);		
+	}
+	
+	
+	// Solve for y from Ky=p
+	
+	for (i=0;i<N;i++)
+	{
+		y[i]=p[i]/K[i];	
+	}
+	
+	// v = Ay (matrix vector multiplication
+	
+	i=0;
+	v[i] = A[i][4]*y[i+nr] + A[i][2]*y[i] + A[i][3]*y[i+1];
+	for (i=1;i<nr;i++)
+	{
+		v[i] = A[i][4]*y[i+nr] + A[i][1]*y[i-1] + A[i][2]*y[i] + A[i][3]*y[i+1];
+	}
+	for (i=nr;i<N-nr;i++)
+	{
+		v[i] = A[i][0]*y[i-nr] + A[i][4]*y[i+nr] + A[i][1]*y[i-1] + A[i][2]*y[i] + A[i][3]*y[i+1];
+	}
+	for (i=N-nr;i<N-1;i++)
+	{
+		v[i]=A[i][0]*y[i-nr] + A[i][1]*y[i-1] + A[i][2]*y[i] + A[i][3]*y[i+1];
+	}
+	i = N-1;
+	v[i] = A[i][0]*y[i-nr] + A[i][1]*y[i-1] + A[i][2]*y[i];
+	
+	//update alpha
+	alpha=rho/dot_product(r_bar,v);
+	
+	for (i=0;i<N;i++)
+	{
+		s[i]=rim1[i]-alpha*v[i];
+	}
+	
+	
+	// Solve for z from Kz=s
+	
+	for (i=0;i<N;i++)
+	{
+		z[i]=s[i]/K[i];	
+	}
+	
+	// t = Az (matrix vector multiplication
+	
+	i=0;
+	t[i] = A[i][4]*z[i+nr] + A[i][2]*z[i] + A[i][3]*z[i+1];
+	for (i=1;i<nr;i++)
+	{
+		t[i] = A[i][4]*z[i+nr] + A[i][1]*z[i-1] + A[i][2]*z[i] + A[i][3]*z[i+1];
+	}
+	for (i=nr;i<N-nr;i++)
+	{
+		t[i] = A[i][0]*z[i-nr] + A[i][4]*z[i+nr] + A[i][1]*z[i-1] + A[i][2]*z[i] + A[i][3]*z[i+1];
+	}
+	for (i=N-nr;i<N-1;i++)
+	{
+		t[i]=A[i][0]*z[i-nr] + A[i][1]*z[i-1] + A[i][2]*z[i] + A[i][3]*z[i+1];
+	}
+	i = N-1;
+	t[i] = A[i][0]*z[i-nr] + A[i][1]*z[i-1] + A[i][2]*z[i];
+	
+	
+	for (i=0;i<N;i++)
+	{
+		kinvs[i]=s[i]/K[i];	
+		kinvt[i]=s[i]/K[i];	
+		
+	}
+	
+// Update omega
+	omega = (dot_product(kinvt,kinvs))/(dot_product(kinvt,kinvt));
+
+// Final answer	
+	for (i=0;i<N;i++)
+	{
+		x[i]=xim1[i]+alpha*y[i]+omega*z[i];
+	}
+	
+	for (i=0;i<N;i++)
+	{
+		r[i]=s[i]-omega*t[i];
+	}
+	
+	
+	// Calculation of Error
+	
+	errsum = 0.0;
+	
+	i=0;
+	errsum = errsum + pow((b[i] - A[i][2]*x[i] - A[i][3]*x[i+1] - A[i][4]*x[i+nr]),2.0);
+	for (i=1;i<nr;i++)
+	{
+		errsum = errsum + pow((b[i] - A[i][1]*x[i-1] - A[i][2]*x[i] - A[i][3]*x[i+1] - A[i][4]*x[i+nr]),2.0);
+	}
+	for (i=nr;i<N-nr;i++)
+	{
+		errsum = errsum + pow((b[i] -  A[i][0]*x[i-nr] - A[i][1]*x[i-1] - A[i][2]*x[i] - A[i][3]*x[i+1] - A[i][4]*x[i+nr]),2.0);
+	}
+	for (i=N-nr;i<N-1;i++)
+	{
+		errsum = errsum + pow((b[i] -  A[i][0]*x[i-nr] - A[i][1]*x[i-1] - A[i][2]*x[i] - A[i][3]*x[i+1]),2.0);
+	}
+	i = N-1;
+	errsum = errsum + pow((b[i] -  A[i][0]*x[i-nr] - A[i][1]*x[i-1] - A[i][2]*x[i]),2.0);
+	
+	errsum = sqrt(errsum)/N;
+	
+	
+// Update all the variables 
+	rhoim1 = rho;
+	omegaim1 = omega;
+	
+	for (i=0;i<N;i++)
+	{
+		rim1[i]=r[i];
+		vim1[i]=v[i];
+		pim1[i]=p[i];
+		xim1[i]=x[i];
+	}	
+}
 
 }
+
 ////////////////End_Linear_Solver///////////////////////////////////////////////////
 
-////////////////Begin_matmul///////////////////////////////////////////////////
 
-void matmul(float rr[N], float AA[N][N], float TT[N],float bb[N])
-{
-	float sum[N];
-	for (int i=0;i<N;i++)
-	{
-		sum[i]=0.0;
-		for (int j=0;j<N;j++)
-		{
-		
-		sum[i]=sum[i]+AA[i][j]*TT[j];
-		
-		}
-		rr[i]=b[i]-sum[i];
-	}
-}
-
-///////////////End_matmul//////////////////////////////////////////////////////
-
-////////////////Begin_matmul_2///////////////////////////////////////////////////
-
-void matmul_2(float vv[N], float AA[N][N], float yy[N])
-{
-	float sum[N];
-	for (int i=0;i<N;i++)
-	{
-		sum[i]=0.0;
-		for (int j=0;j<N;j++)
-		{
-		
-		sum[i]=sum[i]+AA[i][j]*yy[j];
-		
-		}
-		vv[i]=sum[i];
-	}
-}
-
-///////////////End_matmul_2//////////////////////////////////////////////////////
 
 ////////////////Begin_dot_product///////////////////////////////////////////////////
-
-float dot_product(float rr_hat[N],float rr[N])
+long double dot_product (long double a_1[], long double b_1[] )
 {
-	float sum=0.0;
-	for (int i=0;i<N;i++)
-		{
-		
-		sum=sum+rr_hat[i]*rr[i];
-		
-		}
+	long double Dot = 0.0;
 	
-	return sum;
+	for (int i=0;i<N;i++)
+	{
+		Dot = Dot + a_1[i]*b_1[i];
+	}
+	
+	return Dot;
 }
 
-///////////////End_dot_product//////////////////////////////////////////////////////
+////////////////End_dot_product///////////////////////////////////////////////////
+
 
 
 ////////////////Begin_Vz_Midle_Points///////////////////////////////////////////////////
@@ -550,23 +638,23 @@ void Vz_Midle_Points()
 ///////////////End_Vz_Midle_Points//////////////////////////////////////////////////////
 
 
-////////////////Begin_///////////////////////////////////////////////////
-void Change_T_Vr ()
+////////////////Begin_Change_x_Vr///////////////////////////////////////////////////
+void Change_x_Vr ()
 {
 	int k = 0;
 	for (int i=0;i<nr;i++)
 	{
 		for (int j=0;j<nz;j++)
 		{
-			Vr_1[i][j] = T[k];
+			Vr_1[i][j] = x[k];
 			k = k+1;
 		}
 	}
 }
-///////////////End_//////////////////////////////////////////////////////
+///////////////End_Change_x_Vr//////////////////////////////////////////////////////
 
 
-////////////////Begin_///////////////////////////////////////////////////
+////////////////Begin_Vz_Boundary///////////////////////////////////////////////////
 void Vz_Boundary ()
 {
 // axis of symmetry
@@ -599,7 +687,7 @@ for (int d=0;d<nr;d++)
 	
 }
 
-///////////////End_//////////////////////////////////////////////////////
+///////////////End_Vz_Boundary//////////////////////////////////////////////////////
 
 
 
@@ -617,10 +705,6 @@ void Update_Vor ()
 	}
 }
 ///////////////End_Update_Vor//////////////////////////////////////////////////////
-
-
-
-
 
 
 
