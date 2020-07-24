@@ -20,12 +20,16 @@ using namespace std;
 #define lz 10.0
 #define N nr*nz
 
-long double Vor_1[nr][nz],Vr_1[nr][nz],Vz_1[nr][nz],Vorticity[nr][nz];
+long double Vor_1[nr][nz],Vr_1[nr][nz],Vz_1[nr][nz],Vorticity[nr][nz],m[nz];
 long double R[nr],Z[nz],A[N][5],b[N],x[N];
-long double deltar,deltaz,deltat,d,vis,C1_r,C1_z,C1,C2,clvz;
+int t;
+long double deltar,deltaz,deltat,d,vis,C1_r,C1_z,C1,C2,clvz,max_m,avg_m,Tol,Tol_limit,sum_m;
 fstream output_file_1 ("PS5_Vorticity.xls",ios::out);
 fstream output_file_2 ("PS5_Vr.xls",ios::out);
 fstream output_file_3 ("PS5_Vz.xls",ios::out);
+fstream output_file_4 ("PS5_max_m.xls",ios::out);
+fstream output_file_5 ("PS5_avg_m.xls",ios::out);
+
 
 
 
@@ -41,10 +45,10 @@ void Vr_Middle_Points ();
 void Vr_Boundary ();
 void P_Bi_CGSTAB ();
 long double dot_product (long double a_1[], long double b_1[]);
-void Vz_Midle_Points ();
+void Vz_Points ();
 void Change_x_Vr ();
-void Vz_Boundary ();
 void Update_Vor ();
+long double Integration(int j);
 
 
 
@@ -56,6 +60,7 @@ clvz = 	5.0;
 vis = 1.4e-4; //viscosity
 d = 8.3e-4; //density
 deltat = 10e-6;
+Tol_limit = 1e-9;
 
 //Mesh
 Mesh_Generation ();
@@ -64,15 +69,11 @@ Mesh_Generation ();
 //Initialize
 Initialize (1);
 
-
-int t =0;
-while (t<100000)
+Tol = 10.0;
+t =1;
+while (Tol>Tol_limit)
+//while (t<10000)
 {
-
-if (t%1000 == 0)
-{
-	cout<<"Iteration ="<<t<<endl;
-}
 
 //Vorticity
 Vor_Points ();
@@ -85,12 +86,43 @@ P_Bi_CGSTAB ();
 Change_x_Vr ();
 
 //Axial Velocity
-Vz_Midle_Points ();
-Vz_Boundary ();
+Vz_Points ();
 
 Update_Vor ();
 
+
+
+for (int j=0;j<nz;j++)
+{
+	m[j] = Integration(j);
+}
+
+// Max_m & Avg_m
+max_m = abs(m[0]-m[0]);
+sum_m = m[0];
+for (int j=1;j<nz;j++)
+{
+	if (abs(m[j]-m[0]) > max_m)
+	{
+		max_m = abs(m[j]-m[0]);
+	}
+	sum_m = sum_m + m[j];
+}
+avg_m = (sum_m/nz)/m[0];
+Tol = max_m / m[0];
+
+if (t%100 == 0)
+{
+	cout<<"Iteration ="<<t<<endl;
+	cout<<"Error = "<<Tol<<endl;
+	Output("Avg");
+	Output("Max");
+}
+
 t=t+1;
+
+//cout <<"m1 = "<<m[0]<<endl;
+//cout<<"m_max = "<<max_m<<endl;
 }
 
 Output("Vor");
@@ -263,10 +295,25 @@ void Output (string label)
 			output_file_3<<endl;
 		}
 	}
+//////////////////////////////////////////	
+	if (label == "Max")
+	{
+		output_file_4<<max_m<<"	";
+		output_file_4<<t<<"	";
+		output_file_4<<endl;
+		
+	}	
+//////////////////////////////////////////	
+	if (label == "Avg")
+	{
+		output_file_5<<avg_m<<"	";
+		output_file_5<<t<<"	";
+		output_file_5<<endl;
+	}
 }
 ///////////////End_Output_Function//////////////////////////////////////////////////////
 
-////////////////Begin_Vor_Middle_Points///////////////////////////////////////////////////
+////////////////Begin_Vor_Points///////////////////////////////////////////////////
 
 void Vor_Points ()
 {
@@ -304,7 +351,7 @@ void Vor_Points ()
 	i = nr-1;
 	for (int j=0;j<nz;j++)
 	{
-		Vorticity[i][j] = -((Vz_1[i][j] - Vz_1[i][j])/(deltar));
+		Vorticity[i][j] = -((Vz_1[i][j] - Vz_1[i-1][j])/(deltar));
 	}	
 
 //inflow 
@@ -343,7 +390,7 @@ void Vr_Middle_Points ()
 	{
 		for (int j=1;j<nz-1;j++)
 		{
-			A[i+j*nr][2]= (-2.0*C1 -2.0*C2 -1.0/R[i]) ;
+			A[i+j*nr][2]= (-2.0*C1 -2.0*C2 -1.0/(R[i]*R[i]));
 			A[i+j*nr][3]= (C1 + 1.0/(2.0*R[i]*deltar)) ;
 			A[i+j*nr][1]= (C1 - 1.0/(2.0*R[i]*deltar)) ;
 			A[i+j*nr][4]= C2 ;
@@ -369,13 +416,12 @@ void Vr_Boundary ()
 // b is already Zero
 for (int j=0;j<nz;j++)
 		{
-			A[0+j*nr][2]= 1 ;
-			A[nr-1+j*nr][2]= 1;
-			
+			A[0+j*nr][2]= 1.0 ;
+			A[nr-1+j*nr][2]= 1.0;	
 		}
 for (int i=1;i<nr;i++)
 		{
-			A[i][2]= 1 ;	
+			A[i][2]= 1.0 ;	
 		}
 
 // outflow	
@@ -398,8 +444,8 @@ void P_Bi_CGSTAB ()
 	int i,j,k;
 	long double errsum,rho,alpha,omega,CGTOL,rhoim1,omegaim1,beta;
 	
-	
-	CGTOL = 1e-9;
+	// Error limit
+	CGTOL = 1e-5;
 
 	// initial guess
 	for (i=0;i<N;i++)
@@ -460,13 +506,7 @@ errsum=1.0;
 while (errsum > CGTOL)
 {
 	k = k+1;
-	
-	//Track operating of solver
-	if (k%1000 == 0)
-	{
-		cout<<"BiCGSTAB solver iteration ="<<k<<endl<<"Residual ="<<errsum<<endl;
-	}
-	
+		
 	rho = dot_product(rim1,r_bar);
 	beta=rho*alpha/(rhoim1*omegaim1);
 	
@@ -601,8 +641,6 @@ while (errsum > CGTOL)
 
 ////////////////End_Linear_Solver///////////////////////////////////////////////////
 
-
-
 ////////////////Begin_dot_product///////////////////////////////////////////////////
 long double dot_product (long double a_1[], long double b_1[] )
 {
@@ -618,11 +656,33 @@ long double dot_product (long double a_1[], long double b_1[] )
 
 ////////////////End_dot_product///////////////////////////////////////////////////
 
-
-
-////////////////Begin_Vz_Midle_Points///////////////////////////////////////////////////
-void Vz_Midle_Points()
+////////////////Begin_Vz_Points///////////////////////////////////////////////////
+void Vz_Points()
 {
+int i,j;	
+
+// Inflow
+j = 0;
+for (int i=0;i<nr;i++)
+{
+	Vz_1[i][j] = clvz*(1 - (R[i]/lr)*(R[i]/lr));
+}
+
+// Wall
+i = nr-1;
+for (int j=0;j<nz;j++)
+{
+	Vz_1[i][j] = 0;	
+}	
+
+// Axis of symmetry
+i = 0;
+for (int j=1;j<nz;j++)
+{
+	Vz_1[i][j] = Vz_1[i][j-1];
+}
+
+// Middle points
 	for (int i=1;i<nr-1;i++)
 	{
 		for (int j=1;j<nz-1;j++)
@@ -630,9 +690,19 @@ void Vz_Midle_Points()
 			Vz_1[i][j] = (-(Vr_1[i][j]/R[i]) - ((Vr_1[i+1][j]-Vr_1[i-1][j])/(2*deltar)))*deltaz + Vz_1[i][j-1];
 		}
 	}
+	
+//outflow
+j = nz-1;
+for (int i=0;i<nr;i++)
+{
+	Vz_1[i][j] = Vz_1[i][j-1]; 
 }
-///////////////End_Vz_Midle_Points//////////////////////////////////////////////////////
 
+}
+
+
+
+///////////////End_Vz_Points//////////////////////////////////////////////////////
 
 ////////////////Begin_Change_x_Vr///////////////////////////////////////////////////
 void Change_x_Vr ()
@@ -650,43 +720,6 @@ void Change_x_Vr ()
 ///////////////End_Change_x_Vr//////////////////////////////////////////////////////
 
 
-////////////////Begin_Vz_Boundary///////////////////////////////////////////////////
-void Vz_Boundary ()
-{
-// axis of symmetry
-for (int a=0;a<nz;a++)
-{
-	Vz_1[0][a] = Vz_1[1][a];
-}
-
-// inflow
-
-for (int b=1;b<nr-1;b++)
-{
-	Vz_1[b][0] = clvz*(1 - (R[b]/lr)*(R[b]/lr));
-}
-
-//wall
-
-for (int c=0;c<nz;c++)
-{
-	Vz_1[nr][c] = 0;	
-}	
-
-//outflow
-
-for (int d=0;d<nr;d++)
-{
-	Vz_1[d][nz] = Vz_1[d][nz-1]; 
-}
-	
-}
-
-///////////////End_Vz_Boundary//////////////////////////////////////////////////////
-
-
-
-
 ////////////////Begin_Update_Vor///////////////////////////////////////////////////
 void Update_Vor ()
 {
@@ -700,5 +733,33 @@ void Update_Vor ()
 }
 ///////////////End_Update_Vor//////////////////////////////////////////////////////
 
+////////////////Begin_Update_Vor///////////////////////////////////////////////////
+long double Integration (int j)
+{
+	long double integration =0.0;
+	
+	
+	integration = (Vz_1[0][j]*R[0]) + (Vz_1[nr-1][j]*R[0]);
+	
+	for (int i=1;i<nr-1;i++)
+	{
+		
+		if(i%2==0)
+  		{
+   			 integration = integration + 2 * (Vz_1[i][j]*R[i]);
+  		}
+  		else
+  		{
+    		integration = integration + 4 * (Vz_1[i][j]*R[i]);
+ 		}
+
+	}
+	
+	integration = 2*3.14*d*integration * deltar/3;
+	
+	return integration;
+
+}
+///////////////End_Update_Vor//////////////////////////////////////////////////////
 
 
